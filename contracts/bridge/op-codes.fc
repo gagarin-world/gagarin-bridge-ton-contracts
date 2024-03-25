@@ -1,0 +1,8 @@
+const int op::bridge::mint = "op::bridge::mint"c;
+const int op::bridge::burn = "op::bridge::burn"c;
+const int op::bridge::change_data = "op::bridge::change_data"c;
+
+const int log::bridge::mint = "log::bridge::mint"c;
+const int log::bridge::burn = "log::bridge::burn"c;
+
+const int op::mint_record::init = "op::mint_record::init"c;

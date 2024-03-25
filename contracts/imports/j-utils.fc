@@ -1,0 +1,97 @@
+int workchain() asm "0 PUSHINT";
+
+int op::j::t_n() asm "0x7362d09c PUSHINT";
+int op::j::i_t() asm "0x178d4519 PUSHINT";
+int op::j::b_n() asm "0x7bdd97de PUSHINT";
+int op::j::b() asm "0x595f07bc PUSHINT";
+int op::j::t() asm "0xf8a7ea5 PUSHINT";
+int op::j::m() asm "21 PUSHINT";
+
+
+cell make_body_j::i_t(int query_id, int j_amount, slice from, slice response) {
+  return cell it_body = begin_cell() ;; InternalMsgBody
+    .store_uint(op::j::i_t(), 32)
+    .store_uint(query_id, 64) ;; query_id:uint64
+    .store_coins(j_amount) ;; amount:(VarUInteger 16)
+    .store_slice(from) ;; from:MsgAddress
+    .store_slice(response) ;; response_address:MsgAddress
+    .store_coins(0);; forward_ton_amount:(VarUInteger 16)
+  ;; forward_payload:(Either Cell ^Cell)
+    .end_cell();
+}
+
+cell make_body_j::m(int query_id, slice receiver, int amount, cell i_t_body) {
+  return begin_cell()
+    .store_uint(op::j::m(), 32)
+    .store_uint(query_id, 64)
+    .store_slice(receiver)
+    .store_coins(amount)
+    .store_ref(i_t_body)
+    .end_cell();
+}
+
+cell make_body_full_j::m(int query_id, slice receiver, int amount, int j_amount, slice from, slice response) {
+  return make_body_j::m(
+    query_id,
+    receiver,
+    amount,
+    make_body_j::i_t(
+      query_id,
+      j_amount,
+      from,
+      response
+    )
+  );
+}
+
+() send_j_simple(int query_id, int j_amount, slice receiver, slice jw, int coins, int flag) impure inline {
+  cell msg_body = begin_cell()
+    .store_uint(op::j::t(), 32)
+    .store_uint(query_id, 64)
+    .store_coins(j_amount)
+    .store_slice(receiver)
+    .store_slice(receiver)
+    .store_int(false, 1)
+    .store_coins(0)
+    .store_int(false, 1).end_cell();
+
+  cell msg = begin_cell()
+    .store_uint(0x10, 6)
+    .store_slice(jw)
+    .store_coins(coins)
+    .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .store_ref(msg_body).end_cell();
+
+  send_raw_message(msg, flag);
+}
+
+cell pack_jw_data(int bal, slice owner, slice j, cell jw_code) inline {
+  return begin_cell()
+    .store_coins(bal)
+    .store_slice(owner)
+    .store_slice(j)
+    .store_ref(jw_code)
+    .end_cell();
+}
+
+cell build_jw_state_init(slice owner, slice j, cell jw_code) inline {
+  return begin_cell()
+    .store_uint(0, 2)
+    .store_maybe_ref(jw_code)
+    .store_maybe_ref(pack_jw_data(0, owner, j, jw_code))
+    .store_uint(0, 1)
+    .end_cell();
+}
+
+slice calc_jw(cell state_init) inline {
+  return begin_cell()
+    .store_uint(4, 3)
+    .store_int(workchain(), 8)
+    .store_uint(cell_hash(state_init), 256)
+    .end_cell()
+    .begin_parse();
+}
+
+slice calc_user_jw(slice owner, slice j, cell jw_code) inline {
+  return calc_jw(build_jw_state_init(owner, j, jw_code));
+}

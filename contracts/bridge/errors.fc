@@ -1,0 +1,13 @@
+const int err::bridge::bad_sender_jw = 1001;
+const int err::bridge::bad_sender_mint_record = 1002;
+const int err::bridge::bad_signature = 1003;
+const int err::bridge::bad_master_bridge = 1004;
+const int err::bridge::bad_msg_value = 1005;
+const int err::bridge::bad_sender_admin = 1006;
+const int err::bridge::stopped = 1007;
+const int err::bridge::unknown_bounce_op = 1008;
+
+const int err::mint_record::already_inited = 2001;
+const int err::mint_record::bad_sender = 2002;
+
+

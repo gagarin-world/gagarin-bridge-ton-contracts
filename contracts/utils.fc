@@ -1,0 +1,116 @@
+const int BOUNCEABLE = 0x18;
+const int NON_BOUNCEABLE = 0x10;
+
+const int SEND_MODE_REGULAR = 0;
+const int SEND_MODE_PAY_FEES_SEPARETELY = 1;
+const int SEND_MODE_IGNORE_ERRORS = 2;
+const int SEND_MODE_DESTROY = 32;
+const int SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE = 64;
+const int SEND_MODE_CARRY_ALL_BALANCE = 128;
+
+builder store_msg_flags(builder b, int msg_flag) inline {
+  return b.store_uint(msg_flag, 6);
+}
+
+builder store_msgbody_prefix_stateinit(builder b) inline {
+  return b.store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1);
+}
+
+builder store_msgbody_prefix_slice(builder b) inline {
+  return b.store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+}
+
+builder store_msgbody_prefix_ref(builder b) inline {
+  return b.store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+}
+
+builder store_masterchain_address(builder b, int address_hash) inline {
+  return b.store_uint(4, 3).store_int(-1, 8).store_uint(address_hash, 256);
+}
+
+() emit_log_simple(int event_id, cell data, int query_id) impure inline {
+  var msg = begin_cell()
+    .store_uint (12, 4)         ;; ext_out_msg_info$11 src:MsgAddressInt ()
+    .store_uint (1, 2)          ;; addr_extern$01
+    .store_uint (256, 9)        ;; len:(## 9)
+    .store_uint(event_id, 256); ;; external_address:(bits len)
+
+  if(null?(data)) {
+    msg = msg
+      .store_uint(0, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
+      .store_uint(query_id, 64);
+  } else {
+    msg = msg
+      .store_uint(1, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
+      .store_ref(data);
+  }
+
+  send_raw_message(msg.end_cell(), SEND_MODE_REGULAR);
+}
+
+slice make_addr(int wc, int addr_hash) inline {
+  return begin_cell().store_uint(4, 3)
+    .store_int(wc, 8)
+    .store_uint(addr_hash, 256)
+    .end_cell()
+    .begin_parse();
+}
+
+builder msg_header(slice dest, int value, int bounce?) inline {
+  int header_flags = bounce? ? 0x18 : 0x10;
+  return begin_cell()
+    .store_uint(header_flags, 6)
+    .store_slice(dest)
+    .store_coins(value)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32);
+}
+
+builder build_message(slice dest, int value, int bounce?, cell state_init, cell body) inline {
+  builder msg_b = msg_header(dest, value, bounce?);
+  if (~ null?(state_init)) {
+    msg_b = msg_b.store_uint(2 + 1, 2).store_ref(state_init);
+  } else {
+    msg_b = msg_b.store_uint(0, 1);
+  }
+  if (null?(body)) {
+    return msg_b;
+  }
+  msg_b = msg_b.store_uint(1, 1).store_ref(body);
+  return msg_b;
+}
+
+(cell) build_state_init(cell code, cell data) {
+  return begin_cell()
+    .store_uint(6, 1 + 1 + 1 + 1 + 1)
+    .store_ref(code)
+    .store_ref(data)
+    .end_cell();
+}
+
+slice build_addr(int wc, int addr_hash) inline {
+  return begin_cell()
+    .store_uint(2, 2) ;; addr_std$10
+    .store_uint(0, 1) ;; anycast:(Maybe Anycast)
+    .store_uint(wc, 8) ;; workchain_id:int8
+    .store_uint(addr_hash, 256) ;; address:bits256
+    .end_cell()
+    .begin_parse();
+}
+
+() deploy_contract(cell code, cell data, int value, cell body, int mode) impure {
+  cell state_init = build_state_init(code, data);
+  (int wc, _) = parse_std_addr(my_address());
+  slice dest_address = build_addr(wc, cell_hash(state_init));
+  builder msg_b = build_message(dest_address, value, true, state_init, body);
+  send_raw_message(msg_b.end_cell(), mode);
+}
+
+() send_change_simple(slice sender) impure inline {
+  cell msg = begin_cell()
+    .store_uint(0x10, 6)
+    .store_slice(sender)
+    .store_coins(0)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .end_cell();
+  send_raw_message(msg, 64);
+}
